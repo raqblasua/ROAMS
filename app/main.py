@@ -7,6 +7,8 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///requests.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False 
 
+TOKEN= "Y355AlAzbY08YraTOO52pE7I8QgJz0ZRoH1GgYgqUz6sQiukQdt8lEelCMOACD7l"
+
 model_name = "gpt2"  # Puedes usar cualquier otro modelo de Hugging Face
 model = GPT2LMHeadModel.from_pretrained(model_name)
 tokenizer = GPT2Tokenizer.from_pretrained(model_name)
@@ -20,9 +22,19 @@ class RequestLog(db.Model):
 
     def __repr__(self):
         return f'<RequestLog {self.id}>'
+    
+
+def check_token():
+    token = request.headers.get("Authorization")
+    if token != f'Bearer={TOKEN}': return jsonify({"error": "Unauthorized"}), 403
+    return None
+
 
 @app.route('/generate', methods=['POST'])
 def generate_text():
+    auth_response = check_token()
+    if auth_response: return auth_response
+
     data = request.json
     prompt= data.get('prompt', '')
     max_length = data.get('max_length', 50)
@@ -51,13 +63,22 @@ def generate_text():
 @app.route('/history', methods=['GET'])
 def get_history():
     try:
+        auth_response = check_token()
+        if auth_response: 
+            return auth_response
+        
         requests = RequestLog.query.all()
         if not requests:
             return jsonify({"message": "No history found"}), 404
+        
         history = [{"id": r.id, "prompt": r.prompt, "generated_text": r.generated_text} for r in requests]
         return jsonify(history)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/fail', methods=['GET'])
+def get_history_fail():
+    return jsonify({"message": "No history found"}), 404
 
 
 

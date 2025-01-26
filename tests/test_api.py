@@ -3,6 +3,9 @@ import json
 from app.main import app, db, RequestLog  
 
 default_prompt = "Once upon a time"
+TOKEN= "Y355AlAzbY08YraTOO52pE7I8QgJz0ZRoH1GgYgqUz6sQiukQdt8lEelCMOACD7l"
+
+
 class ApiTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -18,6 +21,17 @@ class ApiTestCase(unittest.TestCase):
         with app.app_context():
             db.drop_all()
 
+    def setUp(self):
+        with app.app_context():
+            db.drop_all()
+            db.create_all()  
+
+
+    def get_headers(self):
+        return {
+            'Authorization': f'Bearer={TOKEN}',
+            'Content-Type': 'application/json'
+        }
     
     def test_generate_text_valid_prompt(self):
         response = self.client.post('/generate', 
@@ -26,7 +40,7 @@ class ApiTestCase(unittest.TestCase):
                 'max_length': 50, 
                 'temperature': 1.0, 
                 'top_p': 0.9}),
-            content_type='application/json')
+            headers=self.get_headers())
 
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
@@ -40,7 +54,7 @@ class ApiTestCase(unittest.TestCase):
                 'max_length': 50, 
                 'temperature': 1.0, 
                 'top_p': 0.9}),
-            content_type='application/json')
+            headers=self.get_headers())
 
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
@@ -53,7 +67,7 @@ class ApiTestCase(unittest.TestCase):
                 'max_length': -1, 
                 'temperature': 1.0, 
                 'top_p': 0.9}),
-            content_type='application/json')
+            headers=self.get_headers())
         
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
@@ -66,7 +80,7 @@ class ApiTestCase(unittest.TestCase):
                 'max_length': 50, 
                 'temperature': 3.0, 
                 'top_p': 0.9}),
-            content_type='application/json')
+            headers=self.get_headers())
         
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
@@ -79,30 +93,61 @@ class ApiTestCase(unittest.TestCase):
                 'max_length': 50, 
                 'temperature': 1.0, 
                 'top_p': 1.5}),
-            content_type='application/json')
+            headers=self.get_headers())
 
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
         self.assertEqual(data['error'], 'top_p must be between 0 and 1')
 
     def test_get_history_empty(self):
-        response = self.client.get('/history')
-        self.assertEqual(response.status_code, 404)
+        response = self.client.get('/history', headers=self.get_headers())
         data = json.loads(response.data)
+        print(data)
+
+        self.assertEqual(response.status_code, 404)
         self.assertEqual(data['message'], 'No history found')
 
     def test_get_history_no_empty(self):
         with app.app_context():
-            new_request = RequestLog(prompt='Test prompt', 
+            new_request = RequestLog(prompt=default_prompt, 
                     generated_text='Generated response')
             db.session.add(new_request)
             db.session.commit()
 
-        response = self.client.get('/history')
+        response = self.client.get('/history', headers=self.get_headers())
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
         self.assertGreater(len(data), 0)
-        self.assertEqual(data[0]['prompt'], 'Test prompt')
+        self.assertEqual(data[0]['prompt'], default_prompt)
+   
+
+    def test_invalid_token(self):
+        response = self.client.post('/generate', 
+        data=json.dumps({
+            'prompt': default_prompt, 
+            'max_length': 50, 
+            'temperature': 1.0, 
+            'top_p': 0.9}),
+        content_type='application/json') #NO token
+    
+        self.assertEqual(response.status_code, 403)
+        data = json.loads(response.data)
+        self.assertEqual(data['error'], 'Unauthorized')
+
+    def test_invalid_token_incorrect_value(self):
+        invalid_token = "Bearer invalid_token_value"
+        response = self.client.post('/generate', 
+            data=json.dumps({
+                'prompt': default_prompt, 
+                'max_length': 50, 
+                'temperature': 1.0, 
+                'top_p': 0.9}),
+            headers={'Authorization': invalid_token, #invalid token
+                    'Content-Type': 'application/json'}) 
+        
+        self.assertEqual(response.status_code, 403)
+        data = json.loads(response.data)
+        self.assertEqual(data['error'], 'Unauthorized')
 
 if __name__ == '__main__':
     unittest.main()
