@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
-
+from flasgger import Swagger
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///requests.db'
@@ -9,10 +9,32 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 TOKEN= "Y355AlAzbY08YraTOO52pE7I8QgJz0ZRoH1GgYgqUz6sQiukQdt8lEelCMOACD7l"
 
-model_name = "gpt2"  # Puedes usar cualquier otro modelo de Hugging Face
+model_name = "gpt2"
 model = GPT2LMHeadModel.from_pretrained(model_name)
 tokenizer = GPT2Tokenizer.from_pretrained(model_name)
 
+template = {
+  "swagger": "2.0",
+  "info": {
+    "title": "Text Generation API",
+    "description": "API for generating text using GPT-2",
+    "contact": {
+      "responsibleOrganization": "BLANCO SUAREZ RAQUEL",
+      "responsibleDeveloper": "BLANCO SUAREZ RAQUEL",
+      "email": "blancosuarezraquel@gmail.com",
+      "url": "https://www.linkedin.com/in/raqblasua/",
+    },
+    "version": "0.0.1"
+  },
+  "host": "localhost:5000", 
+  "basePath": "/",  
+  "schemes": [
+    "http",
+    "https"
+  ],
+}
+
+swagger = Swagger(app, template=template)
 db = SQLAlchemy(app)
 
 class RequestLog(db.Model):
@@ -32,6 +54,50 @@ def check_token():
 
 @app.route('/generate', methods=['POST'])
 def generate_text():
+    """
+    Generate text based on a prompt.
+    ---
+    tags:
+      - Text Generation
+    parameters:
+      - in: header
+        name: Authorization
+        type: string
+        required: true
+        description: Bearer token for authentication.
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            prompt:
+              type: string
+              example: "Once upon a time"
+            max_length:
+              type: integer
+              example: 50
+            temperature:
+              type: number
+              example: 1.0
+            top_p:
+              type: number
+              example: 0.9
+    responses:
+      200:
+        description: Generated text
+        schema:
+          type: object
+          properties:
+            generated_text:
+              type: string
+              example: "Once upon a time, there was a brave knight..."
+      400:
+        description: Bad Request
+      403:
+        description: Unauthorized
+    """
+
     auth_response = check_token()
     if auth_response: return auth_response
 
@@ -62,6 +128,32 @@ def generate_text():
 
 @app.route('/history', methods=['GET'])
 def get_history():
+    """
+        Get the history of generated texts.
+        ---
+        tags:
+        - History
+        responses:
+            200:
+                description: List of generated texts
+                schema:
+                type: array
+                items:
+                    type: object
+                    properties:
+                    id:
+                        type: integer
+                        example: 1
+                    prompt:
+                        type: string
+                        example: "Once upon a time"
+                    generated_text:
+                        type: string
+                        example: "Once upon a time, there was a brave knight..."
+            403:
+                description: Unauthorized
+    """
+
     try:
         auth_response = check_token()
         if auth_response: 
@@ -75,10 +167,6 @@ def get_history():
         return jsonify(history)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-@app.route('/fail', methods=['GET'])
-def get_history_fail():
-    return jsonify({"message": "No history found"}), 404
 
 
 
