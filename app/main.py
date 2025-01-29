@@ -168,7 +168,12 @@ def get_history():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/')
+def home():
+    return jsonify({"message": "Welcome to the Text Generation API:"}), 200
+
 
 
 if __name__ == '__main__':
     app.run(debug=True)
+    db.create_all()
